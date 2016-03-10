@@ -1,0 +1,57 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+# We set the last octet in IPV4 address here
+nodes = {
+ 'controller' => [1, 200],
+ 'network' => [1, 202],
+ 'compute' => [1, 201],
+ 'swift' => [1, 210],
+ 'cinder' => [1, 211],
+}
+
+MGN_NETWORK="10.0.0"
+TUNNEL_NETWORK="10.0.1"
+EXTERNAL_NETWORK="192.168.100"
+
+Vagrant.configure("2") do |config| 
+  # Virtualbox
+  config.vm.box = "centos/7"
+  config.vm.synced_folder ".", "/vagrant", type: "rsync"
+
+  nodes.each do |prefix, (count, ip_start)|
+    count.times do |i|
+      hostname = "%s" % [prefix, (i+1)]
+
+      config.vm.define "#{hostname}" do |box|
+        box.vm.hostname = "#{hostname}.book"
+        box.vm.network :private_network, ip: "#{MGN_NETWORK}.#{ip_start+i}", :netmask => "255.255.0.0"
+        box.vm.network :private_network, ip: "#{TUNNEL_NETWORK}.#{ip_start+i}", :netmask => "255.255.0.0" 
+        box.vm.network :private_network, ip: "#{EXTERNAL_NETWORK}.#{ip_start+i}", :netmask => "255.255.255.0"
+
+        # if use virtualbox
+        box.vm.provider :virtualbox do |vbox|
+          # Defaults
+          vbox.customize ["modifyvm", :id, "--memory", 1024]
+          vbox.customize ["modifyvm", :id, "--cpus", 1]
+          vbox.customize ["modifyvm", :id, "--nicpromisc3", "allow-all"]
+          vbox.customize ["modifyvm", :id, "--nicpromisc4", "allow-all"]
+          if prefix == "compute" or prefix == "controller" or prefix == "swift"
+            vbox.customize ["modifyvm", :id, "--memory", 2048]
+            vbox.customize ["modifyvm", :id, "--cpus", 2]
+          end # if
+        end # box.vm virtualbox       
+
+        # if use libvirt
+        box.vm.provider :libvirt do |vbox|
+          vbox.memory = 1024
+          vbox.cpus = 1
+          vbox.nested = true
+          if prefix == "compute" or prefix == "controller" or prefix == "swift"
+            vbox.memory = 2024
+            vbox.cpus = 1
+          end # if
+        end # box.vm libvirt
+      end # config.vm.define 
+    end # count.times
+  end # nodes.each
+end # Vagrant.configure("2")
